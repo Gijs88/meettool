@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Head Position Checker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        #feedback {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        canvas {
+            display: block;
+            margin: 20px auto;
+            border: 5px solid transparent;
+        }
+        .correct {
+            border-color: green;
+        }
+        .incorrect {
+            border-color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Check Your Head Position</h1>
+    <input type="file" id="image-upload" accept="image/*">
+    <canvas id="uploaded-image" width="200" height="200"></canvas>
+    <button id="check-button">Check Position</button>
+    <div id="feedback"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script>
+        const URL = "./my_model/";  // Zorg ervoor dat het pad correct is naar je model
+        let model, maxPredictions;
+
+        // Laad het model
+        async function loadModel() {
+            try {
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+                console.log('Model loaded:', model);  // Controleer of het model goed geladen is
+            } catch (error) {
+                console.error('Error loading model:', error);
+                feedback.textContent = "Error loading model. Check console for details.";
+            }
+        }
+
+        loadModel();  // Laad het model zodra de pagina is geladen
+
+        // Afbeelding uploaden en op canvas weergeven
+        const imageUpload = document.getElementById("image-upload");
+        const canvas = document.getElementById("uploaded-image");
+        const ctx = canvas.getContext("2d");
+        let uploadedImage = null;
+
+        imageUpload.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = () => {
+                        // Controleer of de afbeelding correct geladen is
+                        console.log("Image loaded successfully:", img);
+
+                        // Canvas grootte aanpassen aan afbeelding
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+
+                        // Afbeelding op canvas tekenen
+                        ctx.clearRect(0, 0, canvas.width, canvas.height); // Verwijder oude afbeeldingen
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                        // Sla de afbeelding op voor voorspelling
+                        uploadedImage = img;
+                    };
+                    img.onerror = (err) => {
+                        console.error("Error loading image:", err);
+                        feedback.textContent = "Error loading image.";
+                    };
+                    img.src = e.target.result; // Laad de afbeelding
+                };
+                reader.readAsDataURL(file); // Lees het bestand
+            } else {
+                console.error("Geen bestand geselecteerd!");
+            }
+        });
+
+        // Controleer hoofdpositie met het model
+        const checkButton = document.getElementById("check-button");
+        const feedback = document.getElementById("feedback");
+
+        checkButton.addEventListener("click", async () => {
+            if (!uploadedImage) {
+                feedback.textContent = "Please upload an image first.";
+                return;
+            }
+
+            console.log("Checking position...");
+
+            // Gebruik de geladen afbeelding voor voorspelling
+            try {
+                const prediction = await model.predict(uploadedImage);  
+                console.log("Prediction:", prediction);
+
+                // Log alle voorspellingen voor debugging
+                prediction.forEach(pred => {
+                    console.log(`Class: '${pred.className}', Probability: ${(pred.probability * 100).toFixed(2)}%`);
+                });
+
+                if (!prediction || prediction.length === 0) {
+                    console.error("No predictions found.");
+                    feedback.textContent = "Error: No predictions found.";
+                    return;
+                }
+
+                // Haal de voorspelling voor de juiste en onjuiste positie op (pas de className aan)
+                const correctPositionPrediction = prediction.find(p => p.className.trim() === "Positie hoofd correct");
+                const incorrectPositionPrediction = prediction.find(p => p.className.trim() === "Positie hoofd niet correct");
+
+                // Log de voorspellingen voor debugging
+                console.log("Correct Position Prediction:", correctPositionPrediction);
+                console.log("Incorrect Position Prediction:", incorrectPositionPrediction);
+
+                // Als we geen voorspellingen kunnen vinden voor de verwachte klassen
+                if (!correctPositionPrediction || !incorrectPositionPrediction) {
+                    console.error("Correct or Incorrect position prediction not found.");
+                    feedback.textContent = "Error: Could not find position predictions.";
+                    return;
+                }
+
+                // Vergelijk de waarschijnlijkheden en toon de juiste feedback
+                if (correctPositionPrediction.probability > incorrectPositionPrediction.probability && correctPositionPrediction.probability >= 0.5) {
+                    canvas.classList.add("correct");
+                    canvas.classList.remove("incorrect");
+                    feedback.textContent = `Good Position: ${correctPositionPrediction.className} (${(correctPositionPrediction.probability * 100).toFixed(2)}%)`;
+
+                    canvas.style.filter = "hue-rotate(120deg)";  // Groene tint filter
+                } else {
+                    canvas.classList.add("incorrect");
+                    canvas.classList.remove("correct");
+                    feedback.textContent = `Incorrect Position: ${incorrectPositionPrediction.className} (${(incorrectPositionPrediction.probability * 100).toFixed(2)}%)`;
+
+                    canvas.style.filter = "hue-rotate(0deg)";  // Rood tint filter
+                }
+            } catch (error) {
+                console.error("Prediction failed:", error);
+                feedback.textContent = "Prediction failed. Please try again.";
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+

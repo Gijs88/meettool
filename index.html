@@ -3,28 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Head Position Tool</title>
+    <title>Head Position Checker</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
             text-align: center;
+            margin: 20px;
         }
-        .step-container {
-            display: none;
-        }
-        .step-container.active {
-            display: block;
-        }
-        .image-container img {
-            max-width: 100%;
-            height: auto;
-        }
-        .button {
-            padding: 10px 20px;
-            font-size: 16px;
+        #feedback {
             margin-top: 20px;
-            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
         }
         canvas {
             display: block;
@@ -40,43 +29,11 @@
     </style>
 </head>
 <body>
-    <h1>Head Position Tool</h1>
-    <div id="steps">
-        <!-- Step 1 -->
-        <div class="step-container active" id="step-1">
-            <h2>Step 1: Measure the neck circumference around the Adams apple</h2>
-            <div class="image-container">
-                <img src="/mnt/data/image.png" alt="Neck Circumference Image 1">
-            </div>
-            <p>Use a measuring tape or string to measure around your neck at the Adams apple level.</p>
-            <label for="neck-circumference">Neck Circumference (cm):</label>
-            <input type="number" id="neck-circumference" placeholder="Enter value in cm">
-            <br>
-            <button class="button" id="next-1">Next</button>
-        </div>
-
-        <!-- Step 2 -->
-        <div class="step-container" id="step-2">
-            <h2>Step 2: Measure the neck circumference at the base</h2>
-            <div class="image-container">
-                <img src="/mnt/data/image.png" alt="Neck Base Circumference Image 2">
-            </div>
-            <p>Use a measuring tape or string to measure around your neck at the base level.</p>
-            <label for="neck-base-circumference">Neck Base Circumference (cm):</label>
-            <input type="number" id="neck-base-circumference" placeholder="Enter value in cm">
-            <br>
-            <button class="button" id="next-2">Next</button>
-        </div>
-
-        <!-- Step 3 -->
-        <div class="step-container" id="step-3">
-            <h2>Step 3: Upload your head position image</h2>
-            <input type="file" id="image-upload" accept="image/*">
-            <canvas id="uploaded-image" width="200" height="200"></canvas>
-            <button class="button" id="check-button">Check Position</button>
-            <div id="feedback"></div>
-        </div>
-    </div>
+    <h1>Check Your Head Position</h1>
+    <input type="file" id="image-upload" accept="image/*">
+    <canvas id="uploaded-image" width="200" height="200"></canvas>
+    <button id="check-button">Check Position</button>
+    <div id="feedback"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
@@ -85,36 +42,24 @@
 
         let model, maxPredictions;
 
-        // Load the model
+        // Laad het model
         async function loadModel() {
             try {
                 const modelURL = URL + "model.json";
                 const metadataURL = URL + "metadata.json";
-                model = await tmImage.load(modelURL, metadataURL);
+                
+                model = await tmImage.load(modelURL, metadataURL); // Laad model en metadata
                 maxPredictions = model.getTotalClasses();
-                console.log("Model loaded successfully:", model);
+                console.log('Model loaded successfully:', model);
             } catch (error) {
-                console.error("Error loading model:", error);
-                document.getElementById("feedback").textContent = "Error loading model. Check console for details.";
+                console.error('Error loading model:', error);
+                document.getElementById('feedback').textContent = "Error loading model. Check the console for more details.";
             }
         }
 
-        loadModel();
+        loadModel(); // Model wordt geladen bij het openen van de pagina
 
-        // Handle steps navigation
-        const step1 = document.getElementById("step-1");
-        const step2 = document.getElementById("step-2");
-        const step3 = document.getElementById("step-3");
-        document.getElementById("next-1").addEventListener("click", () => {
-            step1.classList.remove("active");
-            step2.classList.add("active");
-        });
-        document.getElementById("next-2").addEventListener("click", () => {
-            step2.classList.remove("active");
-            step3.classList.add("active");
-        });
-
-        // Handle image upload
+        // Afbeelding uploaden en op canvas weergeven
         const imageUpload = document.getElementById("image-upload");
         const canvas = document.getElementById("uploaded-image");
         const ctx = canvas.getContext("2d");
@@ -127,54 +72,98 @@
                 reader.onload = function (e) {
                     const img = new Image();
                     img.onload = () => {
+                        // Controleer of de afbeelding correct geladen is
+                        console.log("Image loaded successfully:", img);
+
+                        // Canvas grootte aanpassen aan afbeelding
                         canvas.width = img.width;
                         canvas.height = img.height;
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                        // Afbeelding op canvas tekenen
+                        ctx.clearRect(0, 0, canvas.width, canvas.height); // Verwijder oude afbeeldingen
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                        // Sla de afbeelding op voor voorspelling
                         uploadedImage = img;
                     };
-                    img.src = e.target.result;
+                    img.onerror = (err) => {
+                        console.error("Error loading image:", err);
+                        feedback.textContent = "Error loading image.";
+                    };
+                    img.src = e.target.result; // Laad de afbeelding
                 };
-                reader.readAsDataURL(file);
+                reader.readAsDataURL(file); // Lees het bestand
+            } else {
+                console.error("Geen bestand geselecteerd!");
             }
         });
 
-        // Check head position
-        document.getElementById("check-button").addEventListener("click", async () => {
+        // Controleer hoofdpositie met het model
+        const checkButton = document.getElementById("check-button");
+        const feedback = document.getElementById("feedback");
+
+        checkButton.addEventListener("click", async () => {
             if (!uploadedImage) {
-                document.getElementById("feedback").textContent = "Please upload an image first.";
+                feedback.textContent = "Please upload an image first.";
                 return;
             }
+
+            console.log("Checking position...");
+
+            // Gebruik de geladen afbeelding voor voorspelling
             try {
-                const prediction = await model.predict(uploadedImage);
+                const prediction = await model.predict(uploadedImage);  
                 console.log("Prediction:", prediction);
 
-                const correctPosition = prediction.find(p => p.className.trim() === "Positie hoofd correct");
-                const incorrectPosition = prediction.find(p => p.className.trim() === "Positie hoofd niet correct");
+                // Log alle voorspellingen voor debugging
+                prediction.forEach(pred => {
+                    console.log(`Class: '${pred.className}', Probability: ${(pred.probability * 100).toFixed(2)}%`);
+                });
 
-                if (!correctPosition || !incorrectPosition) {
-                    console.error("Position predictions not found.");
-                    document.getElementById("feedback").textContent = "Error: Could not find position predictions.";
+                if (!prediction || prediction.length === 0) {
+                    console.error("No predictions found.");
+                    feedback.textContent = "Error: No predictions found.";
                     return;
                 }
 
-                if (correctPosition.probability > incorrectPosition.probability) {
+                // Haal de voorspelling voor de juiste en onjuiste positie op (pas de className aan)
+                const correctPositionPrediction = prediction.find(p => p.className.trim() === "Positie hoofd correct");
+                const incorrectPositionPrediction = prediction.find(p => p.className.trim() === "Positie hoofd niet correct");
+
+                // Log de voorspellingen voor debugging
+                console.log("Correct Position Prediction:", correctPositionPrediction);
+                console.log("Incorrect Position Prediction:", incorrectPositionPrediction);
+
+                // Als we geen voorspellingen kunnen vinden voor de verwachte klassen
+                if (!correctPositionPrediction || !incorrectPositionPrediction) {
+                    console.error("Correct or Incorrect position prediction not found.");
+                    feedback.textContent = "Error: Could not find position predictions.";
+                    return;
+                }
+
+                // Vergelijk de waarschijnlijkheden en toon de juiste feedback
+                if (correctPositionPrediction.probability > incorrectPositionPrediction.probability && correctPositionPrediction.probability >= 0.5) {
                     canvas.classList.add("correct");
                     canvas.classList.remove("incorrect");
-                    document.getElementById("feedback").textContent = `Good Position: ${(correctPosition.probability * 100).toFixed(2)}% confidence.`;
+                    feedback.textContent = `Good Position: ${correctPositionPrediction.className} (${(correctPositionPrediction.probability * 100).toFixed(2)}%)`;
+
+                    canvas.style.filter = "hue-rotate(120deg)";  // Groene tint filter
                 } else {
                     canvas.classList.add("incorrect");
                     canvas.classList.remove("correct");
-                    document.getElementById("feedback").textContent = `Incorrect Position: ${(incorrectPosition.probability * 100).toFixed(2)}% confidence.`;
+                    feedback.textContent = `Incorrect Position: ${incorrectPositionPrediction.className} (${(incorrectPositionPrediction.probability * 100).toFixed(2)}%)`;
+
+                    canvas.style.filter = "hue-rotate(0deg)";  // Rood tint filter
                 }
             } catch (error) {
                 console.error("Prediction failed:", error);
-                document.getElementById("feedback").textContent = "Prediction failed. Please try again.";
+                feedback.textContent = "Prediction failed. Please try again.";
             }
         });
     </script>
 </body>
 </html>
+
 
 
 
